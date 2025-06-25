@@ -1,13 +1,13 @@
 # Apps.ps1 – instaladores com credencial fixa para acessar o servidor interno
 # ---------------------------------------------------------------------------------
-# ⚠️ Este arquivo contém usuário/senha em texto puro.  
+# ⚠️ Este arquivo contém usuário/senha em texto puro. 
 #    Considere encriptar a senha (ver documentação) se distribuir fora do time de TI.
 
 # --- Configurações globais ---------------------------------------------------------
-$global:InstallShareUser  = 'mundial\_install'       # domínio\usuário com permissão de leitura
-$global:InstallSharePass  = "sup@2023#"             # senha desse usuário
+$global:InstallShareUser  = 'mundial\install'        # domínio\usuário com permissão de leitura
+$global:InstallSharePass  = 'sup@2023#'              # senha desse usuário
 $global:InstallShareRoot  = "\\192.168.4.100\util"  # raiz do compartilhamento
-$global:InstallShareDrive = "Z"                      # letra usada para mapear a unidade
+$global:InstallShareDrive = 'Z'                      # letra usada para mapear a unidade
 
 # Caminho base (dentro do drive mapeado) para os instaladores
 $global:ShareRoot = "$($global:InstallShareDrive):\01 - Programas\WinUtil\Instaladores"
@@ -16,46 +16,35 @@ $global:ShareRoot = "$($global:InstallShareDrive):\01 - Programas\WinUtil\Instal
 function Connect-InstallShare {
     if (-not (Get-PSDrive -Name $global:InstallShareDrive -ErrorAction SilentlyContinue)) {
         try {
-            Write-Host "Tentando mapear $($global:InstallShareRoot) com net use" -ForegroundColor Yellow
-            
-            # Remove mapeamento antigo se existir para evitar conflito
             cmd.exe /c "net use $($global:InstallShareDrive): /delete /yes" | Out-Null
-            
-            # Monta comando net use com credenciais
             $cmd = "net use $($global:InstallShareDrive): $($global:InstallShareRoot) /user:$($global:InstallShareUser) $($global:InstallSharePass) /persistent:no"
-            Write-Host "Executando: $cmd" -ForegroundColor Cyan
-            
-            cmd.exe /c $cmd
-            
-            Start-Sleep -Seconds 1 # Pequena pausa para o sistema processar
-            
-            if (Get-PSDrive -Name $global:InstallShareDrive -ErrorAction SilentlyContinue) {
-                Write-Host "Mapeamento realizado com sucesso via net use." -ForegroundColor Green
-                return $true
-            }
-            else {
-                Write-Host "[ERRO] Falha no mapeamento via net use." -ForegroundColor Red
-                return $false
-            }
+            cmd.exe /c $cmd | Out-Null
+            Start-Sleep -Seconds 1
+            return (Get-PSDrive -Name $global:InstallShareDrive -ErrorAction SilentlyContinue) -ne $null
         }
-        catch {
-            Write-Host "[ERRO] Exceção no net use: $_" -ForegroundColor Red
-            return $false
-        }
+        catch { Write-Host "[ERRO] Falha ao mapear: $_" -ForegroundColor Red; return $false }
     }
-    else {
-        Write-Host "Unidade $($global:InstallShareDrive): já mapeada." -ForegroundColor Green
-        return $true
-    }
+    return $true
 }
-
-# --- Função utilitária: desmonta a unidade ----------------------------------------
 function Disconnect-InstallShare {
     if (Get-PSDrive -Name $global:InstallShareDrive -ErrorAction SilentlyContinue) {
         Remove-PSDrive -Name $global:InstallShareDrive -Force
+        cmd.exe /c "net use $($global:InstallShareDrive): /delete /yes" | Out-Null
     }
-    # Remove também via net use para garantir limpeza completa
-    cmd.exe /c "net use $($global:InstallShareDrive): /delete /yes" | Out-Null
+}
+
+# --- Função genérica para execução silenciosa ------------------------------------
+function Invoke-SilentInstall {
+    param(
+        [string]$SourceExe,
+        [string]$Args = '/quiet /norestart'
+    )
+    if (-not (Test-Path $SourceExe)) { Write-Host "Arquivo não encontrado: $SourceExe" -ForegroundColor Red; return }
+    $tmpExe = Join-Path $env:TEMP ([IO.Path]::GetFileName($SourceExe))
+    Copy-Item $SourceExe $tmpExe -Force
+    Unblock-File $tmpExe
+    Start-Process -FilePath $tmpExe -ArgumentList $Args -Wait
+    Remove-Item $tmpExe -Force -ErrorAction SilentlyContinue
 }
 
 # ----------------------------------------------------------------------------------
@@ -63,44 +52,40 @@ function Disconnect-InstallShare {
 # ----------------------------------------------------------------------------------
 function Install-Office2021 {
     if (-not (Connect-InstallShare)) { return }
+    Write-Host "`n[Office] Instalação silenciosa..." -ForegroundColor Cyan
 
-    Write-Host "`n[Office] Iniciando instalação..." -ForegroundColor Cyan
-
-    $OfficeSetup   = Join-Path $global:ShareRoot "Office\setup.exe"
-    $OfficePTBR    = Join-Path $global:ShareRoot "Office\officesetup.exe"
-
-    if (Test-Path $OfficeSetup) {
-        Start-Process -FilePath $OfficeSetup -Wait
-    } else {
-        Write-Host "setup.exe não encontrado: $OfficeSetup" -ForegroundColor Red
+    $executaveis = @(
+        Join-Path $global:ShareRoot 'Office\setup.exe',
+        Join-Path $global:ShareRoot 'Office\officesetup.exe'
+    )
+    $step = 0; $total = $executaveis.Count
+    foreach ($exe in $executaveis) {
+        $step++
+        Write-Progress -Activity 'Instalando Office' -Status "Etapa $step de $total" -PercentComplete (($step-1)/$total*100)
+        Invoke-SilentInstall $exe
     }
-
-    if (Test-Path $OfficePTBR) {
-        Start-Process -FilePath $OfficePTBR -Wait
-    } else {
-        Write-Host "officesetup.exe não encontrado: $OfficePTBR" -ForegroundColor Red
-    }
-
+    Write-Progress -Activity 'Instalando Office' -Completed
     Disconnect-InstallShare
 }
+
 function Install-Chrome {
     Write-Host "`n[Chrome] Baixando instalador..." -ForegroundColor Cyan
-    $url  = "https://dl.google.com/chrome/install/latest/chrome_installer.exe"
+    $url  = 'https://dl.google.com/chrome/install/latest/chrome_installer.exe'
     $dest = "$env:TEMP\chrome_installer.exe"
     Invoke-WebRequest $url -OutFile $dest
-    Start-Process $dest -ArgumentList "/silent /install" -Wait
+    Start-Process $dest -ArgumentList '/silent /install' -Wait
 }
 
 function Install-7Zip {
     Write-Host "`n[7-Zip] Baixando instalador..." -ForegroundColor Cyan
-    $url  = "https://www.7-zip.org/a/7z2301-x64.exe"
+    $url  = 'https://www.7-zip.org/a/7z2301-x64.exe'
     $dest = "$env:TEMP\7z.exe"
     Invoke-WebRequest $url -OutFile $dest
-    Start-Process $dest -ArgumentList "/S" -Wait
+    Start-Process $dest -ArgumentList '/S' -Wait
 }
 
 # -------------------------------------------------------------------------------
-# Adicione novos instaladores seguindo o padrão:
-# - Crie uma função Install-Nome
-# - Chame Connect-InstallShare / Disconnect-InstallShare se precisar acessar o servidor
-# - Use $global:ShareRoot para o subcaminho
+# Para adicionar mais instaladores:
+# 1. Crie Install-Nome seguindo o padrão.
+# 2. Use Connect-InstallShare/Disconnect-InstallShare para arquivos de rede.
+# 3. Utilize Invoke-SilentInstall para execução sem prompt.
