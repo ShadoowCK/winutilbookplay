@@ -7,10 +7,10 @@
 $global:InstallShareUser  = "mundial\install"      # domínio\usuário com permissão de leitura
 $global:InstallSharePass  = "sup@2023#"               # senha desse usuário
 $global:InstallShareRoot  = "\\192.168.4.100\util"  # raiz do compartilhamento
-$global:InstallShareDrive = "K"                      # letra usada para mapear a unidade
+$global:InstallShareDrive = "Z"                      # letra usada para mapear a unidade
 
 # Caminho base (dentro do drive mapeado) para os instaladores
-$global:ShareRoot = "$($global:InstallShareDrive):\\01 - Programas\\WinUtil\\Instaladores"
+$global:ShareRoot = "$($global:InstallShareDrive):\\192.168.4.100\util\01 - Programas\WinUtil\Instaladores\"
 
 # --- Função utilitária: mapeia a unidade se ainda não existir ---------------------
 function Connect-InstallShare {
@@ -44,8 +44,8 @@ function Install-Office2021 {
 
     Write-Host "`n[Office] Iniciando instalação..." -ForegroundColor Cyan
 
-    $OfficeSetup   = Join-Path $global:ShareRoot "Office\\setup.exe"
-    $OfficePTBR    = Join-Path $global:ShareRoot "Office\\officesetup.exe"
+    $OfficeSetup   = Join-Path $global:ShareRoot "Office\Setup.exe"
+    $OfficePTBR    = Join-Path $global:ShareRoot "Office\OfficeSetup.exe"
 
     if (Test-Path $OfficeSetup) {
         Start-Process -FilePath $OfficeSetup -Wait
