@@ -1,20 +1,27 @@
 # Apps.ps1 – instaladores com etapas numeradas para debug organizado
-# -----------------------------------------------------------------------------
-# [Etapa 1] - Configurações globais de mapeamento e caminhos
-$global:InstallShareUser  = 'mundial\_install'      # domínio\usuário correto com underscore
-$global:InstallSharePass  = 'sup@2023#'             # senha desse usuário
-$global:InstallShareRoot  = "\\192.168.4.100\util"  # raiz do compartilhamento
-$global:InstallShareDrive = 'U'
-$global:ShareRoot = "$($global:InstallShareDrive):\01 - Programas\WinUtil\Instaladores"
+# ------------------------------------------------------------------
+# Ajuste os dados de usuário/senha se necessário.
 
-# [Etapa 2] - Função para mapear unidade de rede
+# ──────────────────────────────────────────────────────────────────
+# [Etapa 1] - Configurações globais
+# ──────────────────────────────────────────────────────────────────
+$global:InstallShareUser  = 'mundial\_install'                # domínio\usuário
+$global:InstallSharePass  = 'sup@2023#'                       # senha
+$global:InstallShareRoot  = '\\192.168.4.100\util\01 - Programas\WinUtil\Instaladores'
+$global:InstallShareDrive = 'Z'                               # letra a mapear
+$global:ShareRoot         = "$($global:InstallShareDrive):"   # raiz local após mapeamento (Z:)
+
+# ──────────────────────────────────────────────────────────────────
+# [Etapa 2] - Mapear unidade de rede
+# ──────────────────────────────────────────────────────────────────
 function Connect-InstallShare {
     if (-not (Get-PSDrive -Name $global:InstallShareDrive -ErrorAction SilentlyContinue)) {
         try {
-            Write-Host "[2.1] Removendo mapeamento anterior, se existir..."
+            Write-Host "[2.1] Removendo mapeamento anterior (se existir)..."
             cmd.exe /c "net use $($global:InstallShareDrive): /delete /yes" | Out-Null
 
-            $cmd = "net use $($global:InstallShareDrive): `"$($global:InstallShareRoot)`" /user:`"$($global:InstallShareUser)`" `"$($global:InstallSharePass)`" /persistent:no"
+            $cmd = "net use $($global:InstallShareDrive): `"$($global:InstallShareRoot)`" " +
+                   "/user:`"$($global:InstallShareUser)`" `"$($global:InstallSharePass)`" /persistent:no"
             Write-Host "[2.2] Executando: $cmd"
             cmd.exe /c $cmd | Out-Null
 
@@ -26,8 +33,7 @@ function Connect-InstallShare {
                 Write-Host "[2.3] Falha no mapeamento." -ForegroundColor Red
                 return $false
             }
-        }
-        catch {
+        } catch {
             Write-Host "[2.4] [ERRO] Falha ao mapear: $_" -ForegroundColor Red
             return $false
         }
@@ -36,7 +42,9 @@ function Connect-InstallShare {
     return $true
 }
 
-# [Etapa 3] - Função para desmontar unidade de rede
+# ──────────────────────────────────────────────────────────────────
+# [Etapa 3] - Desmontar unidade
+# ──────────────────────────────────────────────────────────────────
 function Disconnect-InstallShare {
     if (Get-PSDrive -Name $global:InstallShareDrive -ErrorAction SilentlyContinue) {
         Write-Host "[3.1] Desmontando unidade..."
@@ -45,38 +53,68 @@ function Disconnect-InstallShare {
     }
 }
 
-# [Etapa 4] - Função genérica para executar instaladores de forma silenciosa
+# ──────────────────────────────────────────────────────────────────
+# [Etapa 4] - Copiar + executar instalador silencioso
+# ──────────────────────────────────────────────────────────────────
 function Invoke-SilentInstall {
-    param([string]$SourceExe,[string]$InstallArgs='/quiet /norestart')
+    param (
+        [string]$SourceExe,
+        [string]$InstallArgs = '/quiet /norestart'   # ajuste se precisar de /configure config.xml
+    )
+
     if (-not (Test-Path $SourceExe)) {
         Write-Host "[4.1] Arquivo não encontrado: $SourceExe" -ForegroundColor Red
         return
     }
-    $tmp = Join-Path $env:TEMP ([io.path]::GetFileName($SourceExe))
-    Write-Host "[4.2] Copiando $SourceExe para $tmp"
+
+    $tmp = Join-Path $env:TEMP ([IO.Path]::GetFileName($SourceExe))
+    Write-Host "[4.2] Copiando $SourceExe => $tmp"
     Copy-Item $SourceExe $tmp -Force
     Unblock-File $tmp
-    Write-Host "[4.3] Executando $tmp $InstallArgs"
-    Start-Process $tmp -ArgumentList $InstallArgs -Wait
+
+    Write-Host "[4.3] Executando: $tmp $InstallArgs"
+    try {
+        Start-Process $tmp -ArgumentList $InstallArgs -Wait -ErrorAction Stop
+        Write-Host "      ✔ Concluído."
+    } catch {
+        Write-Error  "      ✖ Falha: $($_.Exception.Message)"
+    }
+
     Remove-Item $tmp -Force -EA SilentlyContinue
 }
 
-# [Etapa 5] - Instalação do Office 2021 silenciosa com progresso
+# ──────────────────────────────────────────────────────────────────
+# [Etapa 5] - Instalar Office 2021 com barra de progresso
+# ──────────────────────────────────────────────────────────────────
 function Install-Office2021 {
     Write-Host "[5.1] Iniciando instalação do Office..."
     if (-not (Connect-InstallShare)) { return }
 
+    # Caso só exista Setup.exe, apague a segunda entrada.
     $exes = @(
-        Join-Path $global:ShareRoot 'Office\setup.exe'
-        Join-Path $global:ShareRoot 'Office\officesetup.exe'
+        @{ Path = Join-Path $global:ShareRoot 'Office\Setup.exe';        Args = '/configure config.xml' }
+        @{ Path = Join-Path $global:ShareRoot 'Office\OfficeSetup.exe';  Args = '/configure config.xml' }
     )
+
     $i = 0; $tot = $exes.Count
-    foreach ($e in $exes) {
+    foreach ($item in $exes) {
         $i++
-        Write-Host "[5.2] Etapa ${i} de ${tot}: $e"
-        Write-Progress -Activity 'Instalando Office' -Status "Etapa $i/$tot" -PercentComplete (($i-1)/$tot*100)
-        Invoke-SilentInstall $e
+        $exe        = $item.Path
+        $installArgs = $item.Args
+
+        Write-Host "`n[5.2] Etapa $i de $tot`: $exe"
+        if (-not (Test-Path $exe)) {
+            Write-Warning "[X] Arquivo não encontrado: $exe — pulando."
+            continue
+        }
+
+        Write-Progress -Activity 'Instalando Office' `
+                       -Status   "Etapa $i/$tot"     `
+                       -PercentComplete (($i - 1) / $tot * 100)
+
+        Invoke-SilentInstall $exe $installArgs
     }
+
     Write-Progress -Activity 'Instalando Office' -Completed
     Disconnect-InstallShare
 }
