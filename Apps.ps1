@@ -42,6 +42,7 @@ function Disconnect-InstallShare {
     Write-Host "[3.1] Sessão com 192.168.4.100 encerrada."
 }
 
+
 # ──────────────────────────────────────────────────────────────────
 # [Etapa 4] - Executar instalador silencioso diretamente do share
 # ──────────────────────────────────────────────────────────────────
@@ -64,30 +65,48 @@ function Invoke-SilentInstallDirect {
         Write-Error  "      ✖ Falha: $($_.Exception.Message)"
     }
 }
-
 # ──────────────────────────────────────────────────────────────────
 # [Etapa 5] - Instalar Office 2021 (direto do compartilhamento)
 # ──────────────────────────────────────────────────────────────────
 function Install-Office2021 {
     Write-Host "[5.1] Iniciando instalação silenciosa do Office..."
-
     if (-not (Connect-InstallShare)) { return }
 
-    $setupPath  = Join-Path $global:ShareRoot 'Office\Setup.exe'
-    $configPath = Join-Path (Split-Path $setupPath) 'config.xml'
+    $officeDir = Join-Path $global:ShareRoot 'Office'
+    $setupExe       = Join-Path $officeDir 'Setup.exe'
+    $officeSetupExe = Join-Path $officeDir 'OfficeSetup.exe'
+    $configPath     = Join-Path $officeDir 'config.xml'
 
-    if (-not (Test-Path $setupPath)) {
-        Write-Host "[5.2] Setup.exe não encontrado: $setupPath" -ForegroundColor Red
-        return
+    $installSteps = @(
+        @{ Path = $setupExe;       Name = 'Setup.exe'       }
+        @{ Path = $officeSetupExe; Name = 'OfficeSetup.exe' }
+    )
+
+    $step = 0; $total = $installSteps.Count
+    foreach ($item in $installSteps) {
+        $step++
+        $exePath = $item.Path
+        $exeName = $item.Name
+
+        Write-Progress -Activity 'Instalando Office' -Status "Passo $step/${total}: $exeName" -PercentComplete (($step-1)/$total*100)
+
+        if (-not (Test-Path $exePath)) {
+            Write-Warning "[5.$step] $exeName não encontrado: $exePath — pulando."
+            continue
+        }
+
+        # Usa /configure apenas para Setup.exe se config.xml existir
+        $installArgs = if ($exeName -eq 'Setup.exe' -and (Test-Path $configPath)) {
+            "/configure `"$configPath`""
+        } else {
+            '/quiet /norestart'
+        }
+
+        Invoke-SilentInstallDirect $exePath $installArgs
     }
 
-    # Se existir config.xml no mesmo diretório, usar /configure
-    $installArgs = if (Test-Path $configPath) { "/configure `"$configPath`"" } else { '/quiet /norestart' }
-
-    Invoke-SilentInstallDirect $setupPath $installArgs
-
-    # Descomente a linha abaixo se quiser encerrar a sessão SMB ao final.
-    # Disconnect-InstallShare
+    Write-Progress -Activity 'Instalando Office' -Completed
+    #Disconnect-InstallShare   # opcional
 }
 
 # [Etapa 6] - Instalação do Chrome
