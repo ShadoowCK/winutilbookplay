@@ -62,38 +62,49 @@ function Disconnect-InstallShare {
 #                               INSTALADORES
 # ----------------------------------------------------------------------------------
 
+# --- Funções utilitárias ----------------------------------------------------------
+function Invoke-SilentInstall {
+    param(
+        [string]$SourceExe,
+        [string]$Args = "/quiet /norestart"
+    )
+
+    if (-not (Test-Path $SourceExe)) {
+        Write-Host "Arquivo não encontrado: $SourceExe" -ForegroundColor Red
+        return
+    }
+
+    $localExe = Join-Path $env:TEMP ([IO.Path]::GetFileName($SourceExe))
+    try {
+        Copy-Item $SourceExe $localExe -Force
+        Unblock-File -Path $localExe
+        Write-Host "→ Executando $localExe $Args" -ForegroundColor Cyan
+        Start-Process -FilePath $localExe -ArgumentList $Args -Wait
+    }
+    finally {
+        if (Test-Path $localExe) { Remove-Item $localExe -Force }
+    }
+}
+
+# --- Instalador do Office 2021 (silencioso) --------------------------------------
 function Install-Office2021 {
     if (-not (Connect-InstallShare)) { return }
 
     Write-Host "`n[Office] Iniciando instalação silenciosa..." -ForegroundColor Cyan
 
-    $OfficeSetup   = Join-Path $global:ShareRoot "Office\\setup.exe"
-    $OfficePTBR    = Join-Path $global:ShareRoot "Office\\officesetup.exe"
-
     $steps = @(
-        @{Path=$OfficeSetup; Name='setup.exe'},
-        @{Path=$OfficePTBR;  Name='officesetup.exe'}
+        @{Path = Join-Path $global:ShareRoot "Office\\setup.exe";       Name = 'setup.exe'},
+        @{Path = Join-Path $global:ShareRoot "Office\\officesetup.exe"; Name = 'officesetup.exe'}
     )
 
-    $total = $steps.Count
-    $current = 0
-
-    foreach ($step in $steps) {
+    $total = $steps.Count; $current = 0
+    foreach ($s in $steps) {
         $current++
-        if (Test-Path $step.Path) {
-            Write-Host "[Office] Executando $($step.Name) (etapa $current/$total) ..." -ForegroundColor Green
-
-            $proc = Start-Process "cmd.exe" -ArgumentList "/c `"$($step.Path)`" /quiet /norestart" -PassThru
-            while (-not $proc.HasExited) {
-                $pct = ($proc.TotalProcessorTime.TotalSeconds % 100)
-                Write-Progress -Activity "Instalando Office" -Status "Etapa $current de $total - aguarde..." -PercentComplete $pct
-                Start-Sleep -Seconds 2
-            }
-            Write-Progress -Activity "Instalando Office" -Completed
-        } else {
-            Write-Host "$($step.Name) não encontrado: $($step.Path)" -ForegroundColor Red
-        }
+        Write-Host "[Office] Etapa $current/$total → $($s.Name)" -ForegroundColor Green
+        Write-Progress -Activity "Instalando Office" -Status "Etapa $current de $total" -PercentComplete (($current-1)/$total*100)
+        Invoke-SilentInstall -SourceExe $s.Path
     }
+    Write-Progress -Activity "Instalando Office" -Completed
 
     Disconnect-InstallShare
 }
