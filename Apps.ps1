@@ -20,8 +20,7 @@ function Connect-InstallShare {
             Write-Host "[2.1] Removendo mapeamento anterior (se existir)..."
             cmd.exe /c "net use $($global:InstallShareDrive): /delete /yes" | Out-Null
 
-            $cmd = "net use $($global:InstallShareDrive): `"$($global:InstallShareRoot)`" " +
-                   "/user:`"$($global:InstallShareUser)`" `"$($global:InstallSharePass)`" /persistent:no"
+            $cmd = "net use $($global:InstallShareDrive): `"$($global:InstallShareRoot)`" /user:`"$($global:InstallShareUser)`" `"$($global:InstallSharePass)`" /persistent:no"
             Write-Host "[2.2] Executando: $cmd"
             cmd.exe /c $cmd | Out-Null
 
@@ -54,68 +53,54 @@ function Disconnect-InstallShare {
 }
 
 # ──────────────────────────────────────────────────────────────────
-# [Etapa 4] - Copiar + executar instalador silencioso
+# [Etapa 4] - Executar instalador silencioso diretamente do share
 # ──────────────────────────────────────────────────────────────────
-function Invoke-SilentInstall {
+function Invoke-SilentInstallDirect {
     param (
-        [string]$SourceExe,
-        [string]$InstallArgs = '/quiet /norestart'   # ajuste se precisar de /configure config.xml
+        [string]$ExePath,
+        [string]$Arguments = '/quiet /norestart'
     )
 
-    if (-not (Test-Path $SourceExe)) {
-        Write-Host "[4.1] Arquivo não encontrado: $SourceExe" -ForegroundColor Red
+    if (-not (Test-Path $ExePath)) {
+        Write-Host "[4.1] Arquivo não encontrado: $ExePath" -ForegroundColor Red
         return
     }
 
-    $tmp = Join-Path $env:TEMP ([IO.Path]::GetFileName($SourceExe))
-    Write-Host "[4.2] Copiando $SourceExe => $tmp"
-    Copy-Item $SourceExe $tmp -Force
-    Unblock-File $tmp
-
-    Write-Host "[4.3] Executando: $tmp $InstallArgs"
+    Write-Host "[4.2] Executando: $ExePath $Arguments"
     try {
-        Start-Process $tmp -ArgumentList $InstallArgs -Wait -ErrorAction Stop
-        Write-Host "      ✔ Concluído."
+        Start-Process $ExePath -ArgumentList $Arguments -Wait -ErrorAction Stop
+        Write-Host "      ✔ Instalação concluída."
     } catch {
         Write-Error  "      ✖ Falha: $($_.Exception.Message)"
     }
-
-    Remove-Item $tmp -Force -EA SilentlyContinue
 }
 
 # ──────────────────────────────────────────────────────────────────
-# [Etapa 5] - Instalar Office 2021 com barra de progresso
+# [Etapa 5] - Instalar Office 2021 diretamente do compartilhamento
 # ──────────────────────────────────────────────────────────────────
 function Install-Office2021 {
-    Write-Host "[5.1] Iniciando instalação do Office..."
+    Write-Host "[5.1] Iniciando instalação silenciosa do Office..."
+
     if (-not (Connect-InstallShare)) { return }
 
-    # Caso só exista Setup.exe, apague a segunda entrada.
-    $exes = @(
-        @{ Path = Join-Path $global:ShareRoot 'Office\Setup.exe';        Args = '/configure config.xml' }
-        @{ Path = Join-Path $global:ShareRoot 'Office\OfficeSetup.exe';  Args = '/configure config.xml' }
-    )
+    $setupPath  = Join-Path $global:ShareRoot 'Office\Setup.exe'
+    $configPath = Join-Path (Split-Path $setupPath) 'config.xml'
 
-    $i = 0; $tot = $exes.Count
-    foreach ($item in $exes) {
-        $i++
-        $exe        = $item.Path
-        $installArgs = $item.Args
-
-        Write-Host "`n[5.2] Etapa $i de $tot`: $exe"
-        if (-not (Test-Path $exe)) {
-            Write-Warning "[X] Arquivo não encontrado: $exe — pulando."
-            continue
-        }
-
-        Write-Progress -Activity 'Instalando Office' `
-                       -Status   "Etapa $i/$tot"     `
-                       -PercentComplete (($i - 1) / $tot * 100)
-
-        Invoke-SilentInstall $exe $installArgs
+    if (-not (Test-Path $setupPath)) {
+        Write-Host "[5.2] Setup.exe não encontrado: $setupPath" -ForegroundColor Red
+        Disconnect-InstallShare
+        return
     }
 
-    Write-Progress -Activity 'Instalando Office' -Completed
+    # Decide argumentos: se houver config.xml, usa /configure; senão, /quiet /norestart.
+    if (Test-Path $configPath) {
+        $installArgs = "/configure `"$configPath`""
+    } else {
+        $installArgs = '/quiet /norestart'
+    }
+
+    Invoke-SilentInstallDirect $setupPath $installArgs
+
     Disconnect-InstallShare
 }
 
