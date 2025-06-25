@@ -1,68 +1,85 @@
-<#
-.SYNOPSIS
-  WinUtilEmpresa – instalador modular inspirado no Chris Titus Tech
-#>
-
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
-############################
-# 1. Carrega catálogo JSON #
-############################
-$catalogoUrl = "https://raw.githubusercontent.com/ShadoowCK/winutilbookplay/main/Apps.json"
-try   { $catalogo = Invoke-WebRequest -UseBasicParsing -Uri $catalogoUrl | ConvertFrom-Json }
-catch { Write-Host "Falha ao baixar catálogo Apps.json" -ForegroundColor Red ; exit }
+# --- Funções utilitárias para carregar JSON remoto ---
+function Load-JsonFromUrl($url) {
+  try { return Invoke-WebRequest -UseBasicParsing $url | ConvertFrom-Json }
+  catch { [System.Windows.Forms.MessageBox]::Show("Falha ao baixar $url"); return $null }
+}
 
-######################################
-# 2. Cria interface com checklistbox #
-######################################
-$form              = New-Object System.Windows.Forms.Form
-$form.Text         = "WinUtil Empresa"
-$form.Size         = New-Object System.Drawing.Size(500,400)
-$form.StartPosition= "CenterScreen"
+$appsCatalog   = Load-JsonFromUrl "https://raw.githubusercontent.com/ShadoowCK/winutilbookplay/main/Apps.json"
+$tweaksCatalog= Load-JsonFromUrl "https://raw.githubusercontent.com/ShadoowCK/winutilbookplay/main/Tweaks.json"
+if (-not $appsCatalog -or -not $tweaksCatalog) { exit }
 
-$clb = New-Object System.Windows.Forms.CheckedListBox
-$clb.Size          = New-Object System.Drawing.Size(460,250)
-$clb.Location      = New-Object System.Drawing.Point(10,10)
+# --- Cria form principal com tabs ---
+$form = New-Object System.Windows.Forms.Form
+$form.Text = "WinUtil Empresa"
+$form.Size = New-Object System.Drawing.Size(600,500)
+$form.StartPosition = "CenterScreen"
 
-foreach ($app in $catalogo) { $clb.Items.Add($app.nome) }
+$tabs = New-Object System.Windows.Forms.TabControl
+$tabs.Size = New-Object System.Drawing.Size(580,450)
+$tabs.Location = New-Object System.Drawing.Point(10,10)
 
-$btnInstalar       = New-Object System.Windows.Forms.Button
-$btnInstalar.Text  = "Instalar Selecionados"
-$btnInstalar.Size  = New-Object System.Drawing.Size(200,40)
-$btnInstalar.Location = New-Object System.Drawing.Point(10,280)
+$tabApps   = New-Object System.Windows.Forms.TabPage("Instalar Programas")
+$tabTweaks = New-Object System.Windows.Forms.TabPage("Tweaks")
+$tabs.TabPages.AddRange(@($tabApps,$tabTweaks))
 
-$btnFechar         = New-Object System.Windows.Forms.Button
-$btnFechar.Text    = "Fechar"
-$btnFechar.Size    = New-Object System.Drawing.Size(120,40)
-$btnFechar.Location= New-Object System.Drawing.Point(350,280)
+# --- Checklist para Apps ---
+$clbApps = New-Object System.Windows.Forms.CheckedListBox
+$clbApps.Size = New-Object System.Drawing.Size(540,300)
+$clbApps.Location = New-Object System.Drawing.Point(20,20)
+foreach ($app in $appsCatalog) { $clbApps.Items.Add($app.nome) }
+$tabApps.Controls.Add($clbApps)
 
-###########################################################
-# 3. Quando clicar, baixa Apps.ps1 e executa app a app    #
-###########################################################
-$btnInstalar.Add_Click({
-    # Carrega as funções de instalação
-    $appsUrl = "https://raw.githubusercontent.com/ShadoowCK/winutilbookplay/main/Apps.ps1"
-    try   { Invoke-Expression (Invoke-WebRequest -UseBasicParsing $appsUrl).Content }
-    catch { [System.Windows.Forms.MessageBox]::Show("Falha ao baixar Apps.ps1") ; return }
+$btnInstallApps = New-Object System.Windows.Forms.Button
+$btnInstallApps.Text = "Instalar Selecionados"
+$btnInstallApps.Size = New-Object System.Drawing.Size(180,40)
+$btnInstallApps.Location = New-Object System.Drawing.Point(20,340)
+$tabApps.Controls.Add($btnInstallApps)
 
-    # Para cada item marcado, chama a função especificada no JSON
-    foreach ($indice in $clb.CheckedIndices) {
-        $appObj   = $catalogo[$indice]
-        $funcName = $appObj.funcao
-        if (Get-Command $funcName -ErrorAction SilentlyContinue) {
-            & $funcName
-        } else {
-            Write-Host "Função $funcName não encontrada." -ForegroundColor Yellow
-        }
-    }
+# --- Checklist para Tweaks ---
+$clbTweaks = New-Object System.Windows.Forms.CheckedListBox
+$clbTweaks.Size = New-Object System.Drawing.Size(540,300)
+$clbTweaks.Location = New-Object System.Drawing.Point(20,20)
+foreach ($tweak in $tweaksCatalog) { $clbTweaks.Items.Add($tweak.nome) }
+$tabTweaks.Controls.Add($clbTweaks)
 
-    [System.Windows.Forms.MessageBox]::Show("Processo concluído!")
+$btnRunTweaks = New-Object System.Windows.Forms.Button
+$btnRunTweaks.Text = "Aplicar Tweaks"
+$btnRunTweaks.Size = New-Object System.Drawing.Size(180,40)
+$btnRunTweaks.Location = New-Object System.Drawing.Point(20,340)
+$tabTweaks.Controls.Add($btnRunTweaks)
+
+# --- Botão Fechar ---
+$btnClose = New-Object System.Windows.Forms.Button
+$btnClose.Text = "Fechar"
+$btnClose.Size = New-Object System.Drawing.Size(120,40)
+$btnClose.Location = New-Object System.Drawing.Point(470,420)
+$btnClose.Add_Click({ $form.Close() })
+
+$form.Controls.AddRange(@($tabs,$btnClose))
+$form.Topmost = $true
+
+# --- Ações ao clicar instalar apps ---
+$btnInstallApps.Add_Click({
+  Invoke-Expression (Invoke-WebRequest -UseBasicParsing "https://raw.githubusercontent.com/ShadoowCK/winutilbookplay/main/Apps.ps1").Content
+  foreach ($i in $clbApps.CheckedIndices) {
+    $f = $appsCatalog[$i].funcao
+    if (Get-Command $f -ErrorAction SilentlyContinue) { & $f } else { Write-Host "Função $f não existe." }
+  }
+  [System.Windows.Forms.MessageBox]::Show("Programas instalados.")
 })
 
-$btnFechar.Add_Click({ $form.Close() })
+# --- Ações ao clicar aplicar tweaks ---
+$btnRunTweaks.Add_Click({
+  Invoke-Expression (Invoke-WebRequest -UseBasicParsing "https://raw.githubusercontent.com/ShadoowCK/winutilbookplay/main/Tweaks.ps1").Content
+  foreach ($i in $clbTweaks.CheckedIndices) {
+    $f = $tweaksCatalog[$i].funcao
+    if (Get-Command $f -ErrorAction SilentlyContinue) { & $f } else { Write-Host "Função $f não existe." }
+  }
+  [System.Windows.Forms.MessageBox]::Show("Tweaks aplicados.")
+})
 
-$form.Controls.AddRange(@($clb,$btnInstalar,$btnFechar))
-$form.Topmost = $true
+# --- Exibe a janela ---
 $form.ShowDialog()
-Test-ScriptExtent
