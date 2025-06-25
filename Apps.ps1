@@ -70,23 +70,33 @@ function Install-Office2021 {
     $OfficeSetup   = Join-Path $global:ShareRoot "Office\\setup.exe"
     $OfficePTBR    = Join-Path $global:ShareRoot "Office\\officesetup.exe"
 
-    if (Test-Path $OfficeSetup) {
-        Write-Host "[Office] Executando setup.exe em modo silencioso..." -ForegroundColor Green
-        Start-Process "cmd.exe" -ArgumentList "/c `"$OfficeSetup`" /quiet /norestart" -Wait
-    } else {
-        Write-Host "setup.exe não encontrado: $OfficeSetup" -ForegroundColor Red
-    }
+    $steps = @(
+        @{Path=$OfficeSetup; Name='setup.exe'},
+        @{Path=$OfficePTBR;  Name='officesetup.exe'}
+    )
 
-    if (Test-Path $OfficePTBR) {
-        Write-Host "[Office] Executando officesetup.exe em modo silencioso..." -ForegroundColor Green
-        Start-Process "cmd.exe" -ArgumentList "/c `"$OfficePTBR`" /quiet /norestart" -Wait
-    } else {
-        Write-Host "officesetup.exe não encontrado: $OfficePTBR" -ForegroundColor Red
+    $total = $steps.Count
+    $current = 0
+
+    foreach ($step in $steps) {
+        $current++
+        if (Test-Path $step.Path) {
+            Write-Host "[Office] Executando $($step.Name) (etapa $current/$total) ..." -ForegroundColor Green
+
+            $proc = Start-Process "cmd.exe" -ArgumentList "/c `"$($step.Path)`" /quiet /norestart" -PassThru
+            while (-not $proc.HasExited) {
+                $pct = ($proc.TotalProcessorTime.TotalSeconds % 100)
+                Write-Progress -Activity "Instalando Office" -Status "Etapa $current de $total - aguarde..." -PercentComplete $pct
+                Start-Sleep -Seconds 2
+            }
+            Write-Progress -Activity "Instalando Office" -Completed
+        } else {
+            Write-Host "$($step.Name) não encontrado: $($step.Path)" -ForegroundColor Red
+        }
     }
 
     Disconnect-InstallShare
 }
-
 function Install-Chrome {
     Write-Host "`n[Chrome] Baixando instalador..." -ForegroundColor Cyan
     $url  = "https://dl.google.com/chrome/install/latest/chrome_installer.exe"
