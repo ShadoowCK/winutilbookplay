@@ -61,50 +61,25 @@ function Disconnect-InstallShare {
 # ----------------------------------------------------------------------------------
 #                               INSTALADORES
 # ----------------------------------------------------------------------------------
-
-# --- Funções utilitárias ----------------------------------------------------------
-function Invoke-SilentInstall {
-    param(
-        [string]$SourceExe,
-        [string]$Args = "/quiet /norestart"
-    )
-
-    if (-not (Test-Path $SourceExe)) {
-        Write-Host "Arquivo não encontrado: $SourceExe" -ForegroundColor Red
-        return
-    }
-
-    $localExe = Join-Path $env:TEMP ([IO.Path]::GetFileName($SourceExe))
-    try {
-        Copy-Item $SourceExe $localExe -Force
-        Unblock-File -Path $localExe
-        Write-Host "→ Executando $localExe $Args" -ForegroundColor Cyan
-        Start-Process -FilePath $localExe -ArgumentList $Args -Wait
-    }
-    finally {
-        if (Test-Path $localExe) { Remove-Item $localExe -Force }
-    }
-}
-
-# --- Instalador do Office 2021 (silencioso) --------------------------------------
 function Install-Office2021 {
     if (-not (Connect-InstallShare)) { return }
 
-    Write-Host "`n[Office] Iniciando instalação silenciosa..." -ForegroundColor Cyan
+    Write-Host "`n[Office] Iniciando instalação..." -ForegroundColor Cyan
 
-    $steps = @(
-        @{Path = Join-Path $global:ShareRoot "Office\\setup.exe";       Name = 'setup.exe'},
-        @{Path = Join-Path $global:ShareRoot "Office\\officesetup.exe"; Name = 'officesetup.exe'}
-    )
+    $OfficeSetup   = Join-Path $global:ShareRoot "Office\setup.exe"
+    $OfficePTBR    = Join-Path $global:ShareRoot "Office\officesetup.exe"
 
-    $total = $steps.Count; $current = 0
-    foreach ($s in $steps) {
-        $current++
-        Write-Host "[Office] Etapa $current/$total → $($s.Name)" -ForegroundColor Green
-        Write-Progress -Activity "Instalando Office" -Status "Etapa $current de $total" -PercentComplete (($current-1)/$total*100)
-        Invoke-SilentInstall -SourceExe $s.Path
+    if (Test-Path $OfficeSetup) {
+        Start-Process -FilePath $OfficeSetup -Wait
+    } else {
+        Write-Host "setup.exe não encontrado: $OfficeSetup" -ForegroundColor Red
     }
-    Write-Progress -Activity "Instalando Office" -Completed
+
+    if (Test-Path $OfficePTBR) {
+        Start-Process -FilePath $OfficePTBR -Wait
+    } else {
+        Write-Host "officesetup.exe não encontrado: $OfficePTBR" -ForegroundColor Red
+    }
 
     Disconnect-InstallShare
 }
