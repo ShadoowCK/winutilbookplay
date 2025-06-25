@@ -1,55 +1,45 @@
 # Apps.ps1 – instaladores com etapas numeradas para debug organizado
 # ------------------------------------------------------------------
-# Ajuste os dados de usuário/senha se necessário.
+# Este script executa instaladores diretamente do compartilhamento UNC
+# sem mapear unidade (Z:). Ele apenas autentica a sessão SMB com
+# `net use` e dispara o executável no local.
 
 # ──────────────────────────────────────────────────────────────────
 # [Etapa 1] - Configurações globais
 # ──────────────────────────────────────────────────────────────────
-$global:InstallShareUser  = 'mundial\_install'                # domínio\usuário
-$global:InstallSharePass  = 'sup@2023#'                       # senha
-$global:InstallShareRoot  = '\\192.168.4.100\util\01 - Programas\WinUtil\Instaladores'
-$global:InstallShareDrive = 'Z'                               # letra a mapear
-$global:ShareRoot         = "$($global:InstallShareDrive):"   # raiz local após mapeamento (Z:)
+$global:InstallShareUser = 'mundial\_install'                # domínio\usuário
+$global:InstallSharePass = 'sup@2023#'                       # senha desse usuário
+$global:InstallShareRoot = '\\192.168.4.100\util\01 - Programas\WinUtil\Instaladores'
+$global:ShareRoot        = $global:InstallShareRoot          # raiz UNC para todos os instaladores
 
 # ──────────────────────────────────────────────────────────────────
-# [Etapa 2] - Mapear unidade de rede
+# [Etapa 2] - Autenticar sessão SMB (sem mapear unidade)
 # ──────────────────────────────────────────────────────────────────
 function Connect-InstallShare {
-    if (-not (Get-PSDrive -Name $global:InstallShareDrive -ErrorAction SilentlyContinue)) {
-        try {
-            Write-Host "[2.1] Removendo mapeamento anterior (se existir)..."
-            cmd.exe /c "net use $($global:InstallShareDrive): /delete /yes" | Out-Null
-
-            $cmd = "net use $($global:InstallShareDrive): `"$($global:InstallShareRoot)`" /user:`"$($global:InstallShareUser)`" `"$($global:InstallSharePass)`" /persistent:no"
-            Write-Host "[2.2] Executando: $cmd"
-            cmd.exe /c $cmd | Out-Null
-
-            Start-Sleep 1
-            if (Get-PSDrive -Name $global:InstallShareDrive -ErrorAction SilentlyContinue) {
-                Write-Host "[2.3] Mapeamento realizado com sucesso."
-                return $true
-            } else {
-                Write-Host "[2.3] Falha no mapeamento." -ForegroundColor Red
-                return $false
-            }
-        } catch {
-            Write-Host "[2.4] [ERRO] Falha ao mapear: $_" -ForegroundColor Red
-            return $false
-        }
+    # Verifica se já existe credencial para o host
+    $existing = (cmd.exe /c "net use" | Select-String "192.168.4.100").Line
+    if ($existing) {
+        Write-Host "[2.1] Já autenticado em 192.168.4.100."; return $true
     }
-    Write-Host "[2.5] Unidade já mapeada."
-    return $true
+
+    $cmd = "net use `"$($global:InstallShareRoot)`" /user:$($global:InstallShareUser) $($global:InstallSharePass) /persistent:no"
+    Write-Host "[2.2] Autenticando com: $cmd"
+    cmd.exe /c "$cmd"
+
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "[2.3] Autenticação OK."; return $true
+    } else {
+        Write-Host "[2.3] Falha na autenticação." -ForegroundColor Red
+        return $false
+    }
 }
 
 # ──────────────────────────────────────────────────────────────────
-# [Etapa 3] - Desmontar unidade
+# [Etapa 3] - Encerrar sessão SMB (opcional)
 # ──────────────────────────────────────────────────────────────────
 function Disconnect-InstallShare {
-    if (Get-PSDrive -Name $global:InstallShareDrive -ErrorAction SilentlyContinue) {
-        Write-Host "[3.1] Desmontando unidade..."
-        Remove-PSDrive -Name $global:InstallShareDrive -Force
-        cmd.exe /c "net use $($global:InstallShareDrive): /delete /yes" | Out-Null
-    }
+    cmd.exe /c "net use \"$($global:InstallShareRoot)\" /delete /yes" | Out-Null
+    Write-Host "[3.1] Sessão com 192.168.4.100 encerrada."
 }
 
 # ──────────────────────────────────────────────────────────────────
@@ -68,7 +58,7 @@ function Invoke-SilentInstallDirect {
 
     Write-Host "[4.2] Executando: $ExePath $Arguments"
     try {
-        Start-Process $ExePath -ArgumentList $Arguments -Wait -ErrorAction Stop
+        Start-Process -FilePath $ExePath -ArgumentList $Arguments -Wait -ErrorAction Stop
         Write-Host "      ✔ Instalação concluída."
     } catch {
         Write-Error  "      ✖ Falha: $($_.Exception.Message)"
@@ -76,7 +66,7 @@ function Invoke-SilentInstallDirect {
 }
 
 # ──────────────────────────────────────────────────────────────────
-# [Etapa 5] - Instalar Office 2021 diretamente do compartilhamento
+# [Etapa 5] - Instalar Office 2021 (direto do compartilhamento)
 # ──────────────────────────────────────────────────────────────────
 function Install-Office2021 {
     Write-Host "[5.1] Iniciando instalação silenciosa do Office..."
@@ -88,20 +78,16 @@ function Install-Office2021 {
 
     if (-not (Test-Path $setupPath)) {
         Write-Host "[5.2] Setup.exe não encontrado: $setupPath" -ForegroundColor Red
-        Disconnect-InstallShare
         return
     }
 
-    # Decide argumentos: se houver config.xml, usa /configure; senão, /quiet /norestart.
-    if (Test-Path $configPath) {
-        $installArgs = "/configure `"$configPath`""
-    } else {
-        $installArgs = '/quiet /norestart'
-    }
+    # Se existir config.xml no mesmo diretório, usar /configure
+    $installArgs = if (Test-Path $configPath) { "/configure `"$configPath`"" } else { '/quiet /norestart' }
 
     Invoke-SilentInstallDirect $setupPath $installArgs
 
-    Disconnect-InstallShare
+    # Descomente a linha abaixo se quiser encerrar a sessão SMB ao final.
+    # Disconnect-InstallShare
 }
 
 # [Etapa 6] - Instalação do Chrome
