@@ -65,26 +65,25 @@ function Disconnect-InstallShare {
 function Install-Office2021 {
     if (-not (Connect-InstallShare)) { return }
 
-    Write-Host "`n[Office] Iniciando instalação..." -ForegroundColor Cyan
+    Write-Host "`n[Office] Iniciando instalação silenciosa..." -ForegroundColor Cyan
 
     $OfficeSetup   = Join-Path $global:ShareRoot "Office\setup.exe"
     $OfficePTBR    = Join-Path $global:ShareRoot "Office\officesetup.exe"
 
     if (Test-Path $OfficeSetup) {
-        Start-Process -FilePath $OfficeSetup -Wait
+        Start-Process -FilePath $OfficeSetup -ArgumentList "/quiet /norestart" -Wait
     } else {
         Write-Host "setup.exe não encontrado: $OfficeSetup" -ForegroundColor Red
     }
 
     if (Test-Path $OfficePTBR) {
-        Start-Process -FilePath $OfficePTBR -Wait
+        Start-Process -FilePath $OfficePTBR -ArgumentList "/quiet /norestart" -Wait
     } else {
         Write-Host "officesetup.exe não encontrado: $OfficePTBR" -ForegroundColor Red
     }
 
     Disconnect-InstallShare
 }
-
 function Install-Chrome {
     Write-Host "`n[Chrome] Baixando instalador..." -ForegroundColor Cyan
     $url  = "https://dl.google.com/chrome/install/latest/chrome_installer.exe"
