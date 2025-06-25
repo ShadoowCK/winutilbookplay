@@ -67,8 +67,9 @@ function Install-Office2021 {
     if (-not (Connect-InstallShare)) { return }
 
     $exes = @(
-        Join-Path $global:ShareRoot 'Office\setup.exe',
-        Join-Path $global:ShareRoot 'Office\officesetup.exe')
+        Join-Path $global:ShareRoot 'Office\setup.exe'
+        Join-Path $global:ShareRoot 'Office\officesetup.exe'
+    )
     $i = 0; $tot = $exes.Count
     foreach ($e in $exes) {
         $i++
