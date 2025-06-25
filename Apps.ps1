@@ -1,6 +1,3 @@
-# Caminho base do compartilhamento
-$ShareRoot = "\\192.168.4.100\util\01 - Programas\WinUtil\Instaladores"
-
 function Install-Office2021 {
     Write-Host "`n[Office] Iniciando instalação..." -ForegroundColor Cyan
 
