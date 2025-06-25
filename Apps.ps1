@@ -4,27 +4,22 @@ $ShareRoot = "\\192.168.4.100\util\01 - Programas\WinUtil\Instaladores"
 function Install-Office2021 {
     Write-Host "`n[Office] Iniciando instalação..." -ForegroundColor Cyan
 
-    # --- pasta específica do Office ---
-    $OfficeDir     = Join-Path "$ShareRoot" "Office"
-    $setup         = Join-Path "$OfficeDir" "setup.exe"
-    $setupTraducao = Join-Path "$OfficeDir" "officesetup.exe"
+    $OfficeSetup   = "\\192.168.4.100\util\01 - Programas\WinUtil\Instaladores\Office\setup.exe"
+    $OfficePTBR    = "\\192.168.4.100\util\01 - Programas\WinUtil\Instaladores\Office\officesetup.exe"
 
-    # --- installer principal ---
-    if (Test-Path "$setup") {
-        Write-Host "Executando $setup"
-        Start-Process "$setup" -Wait          # acrescente /quiet /configure … se precisar silencioso
+    if (Test-Path "$OfficeSetup") {
+        Start-Process -FilePath "$OfficeSetup" -Wait
     } else {
-        Write-Host "setup.exe não encontrado em $OfficeDir" -ForegroundColor Red
+        Write-Host "setup.exe não encontrado: $OfficeSetup" -ForegroundColor Red
     }
 
-    # --- pacote de idioma ---
-    if (Test-Path "$setupTraducao") {
-        Write-Host "Executando $setupTraducao"
-        Start-Process "$setupTraducao" -Wait  # idem: parâmetros silenciosos, se houver
+    if (Test-Path "$OfficePTBR") {
+        Start-Process -FilePath "$OfficePTBR" -Wait
     } else {
-        Write-Host "officesetup.exe não encontrado em $OfficeDir" -ForegroundColor Red
+        Write-Host "officesetup.exe não encontrado: $OfficePTBR" -ForegroundColor Red
     }
 }
+
 function Install-Chrome {
     Write-Host "`n[Chrome] Baixando instalador..." -ForegroundColor Cyan
     $url  = "https://dl.google.com/chrome/install/latest/chrome_installer.exe"

@@ -2,13 +2,13 @@ Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
 # --- Funções utilitárias para carregar JSON remoto ---
-function Load-JsonFromUrl($url) {
+function Get-JsonFromUrl($url) {
   try { return Invoke-WebRequest -UseBasicParsing $url | ConvertFrom-Json }
   catch { [System.Windows.Forms.MessageBox]::Show("Falha ao baixar $url"); return $null }
 }
 
-$appsCatalog   = Load-JsonFromUrl "https://raw.githubusercontent.com/ShadoowCK/winutilbookplay/main/Apps.json"
-$tweaksCatalog= Load-JsonFromUrl "https://raw.githubusercontent.com/ShadoowCK/winutilbookplay/main/Tweaks.json"
+$appsCatalog   = Get-JsonFromUrl "https://raw.githubusercontent.com/ShadoowCK/winutilbookplay/main/Apps.json"
+$tweaksCatalog= Get-JsonFromUrl "https://raw.githubusercontent.com/ShadoowCK/winutilbookplay/main/Tweaks.json"
 if (-not $appsCatalog -or -not $tweaksCatalog) { exit }
 
 # --- Cria form principal com tabs ---

@@ -1,0 +1,18 @@
+[
+  {
+    "nome": "Mostrar extensões de arquivo",
+    "funcao": "Tweak-ShowFileExtensions"
+  },
+  {
+    "nome": "Desativar Cortana",
+    "funcao": "Tweak-DisableCortana"
+  },
+  {
+    "nome": "Desativar apps em 2º plano",
+    "funcao": "Tweak-DisableBackgroundApps"
+  },
+  {
+    "nome": "Ativar tema escuro",
+    "funcao": "Tweak-EnableDarkMode"
+  }
+]
