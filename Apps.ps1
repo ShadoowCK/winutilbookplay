@@ -4,7 +4,7 @@
 #    Considere encriptar a senha (ver documentação) se distribuir fora do time de TI.
 
 # --- Configurações globais ---------------------------------------------------------
-$global:InstallShareUser  = 'mundial\install'       # domínio\usuário com permissão de leitura
+$global:InstallShareUser  = 'mundial\_install'       # domínio\usuário com permissão de leitura
 $global:InstallSharePass  = "sup@2023#"             # senha desse usuário
 $global:InstallShareRoot  = "\\192.168.4.100\util"  # raiz do compartilhamento
 $global:InstallShareDrive = "Z"                      # letra usada para mapear a unidade
