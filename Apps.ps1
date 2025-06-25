@@ -24,7 +24,14 @@ function Install-Office2021 {
     } else {
         Write-Host "officesetup.exe não encontrado em $OfficeDir" -ForegroundColor Red
     }
-}
+    function Install-WinRar {
+        $OfficeDir        =Join-Path "$ShareRoot" "Winrar"
+        $setup = Join-Path "$OfficeDir" "winrar.exe"
+    }
+    
+    }
+
+    
 function Install-Chrome {
     Write-Host "`n[Chrome] Baixando instalador..." -ForegroundColor Cyan
     $url  = "https://dl.google.com/chrome/install/latest/chrome_installer.exe"
@@ -40,3 +47,4 @@ function Install-7Zip {
     Invoke-WebRequest $url -OutFile $dest
     Start-Process $dest -ArgumentList "/S" -Wait
 }
+
