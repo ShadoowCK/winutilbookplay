@@ -1,19 +1,21 @@
+# Caminho base do compartilhamento
+$ShareRoot = "\\192.168.4.100\util\01 - Programas\WinUtil\Instaladores"
 function Install-Office2021 {
     Write-Host "`n[Office] Iniciando instalação..." -ForegroundColor Cyan
 
-    $OfficeSetup   = "\\192.168.4.100\util\01 - Programas\WinUtil\Instaladores\Office\setup.exe"
-    $OfficePTBR    = "\\192.168.4.100\util\01 - Programas\WinUtil\Instaladores\Office\officesetup.exe"
+    $OfficeSetup   = Join-Path "$ShareRoot" "Office\Setup.exe"
+    $OfficePTBR    = Join-Path "$ShareRoot" "Office\OfficeSetup.exe"
 
     if (Test-Path "$OfficeSetup") {
         Start-Process -FilePath "$OfficeSetup" -Wait
     } else {
-        Write-Host "setup.exe não encontrado: $OfficeSetup" -ForegroundColor Red
+        Write-Host "Setup.exe não encontrado: $OfficeSetup" -ForegroundColor Red
     }
 
     if (Test-Path "$OfficePTBR") {
         Start-Process -FilePath "$OfficePTBR" -Wait
     } else {
-        Write-Host "officesetup.exe não encontrado: $OfficePTBR" -ForegroundColor Red
+        Write-Host "OfficeSetup.exe não encontrado: $OfficePTBR" -ForegroundColor Red
     }
 }
 
