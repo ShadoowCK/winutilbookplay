@@ -25,7 +25,7 @@ function Connect-InstallShare {
             $cmd = "net use $($global:InstallShareDrive): $($global:InstallShareRoot) /user:$($global:InstallShareUser) $($global:InstallSharePass) /persistent:no"
             Write-Host "Executando: $cmd" -ForegroundColor Cyan
             
-            $result = cmd.exe /c $cmd
+            cmd.exe /c $cmd
             
             Start-Sleep -Seconds 1 # Pequena pausa para o sistema processar
             
@@ -67,16 +67,18 @@ function Install-Office2021 {
 
     Write-Host "`n[Office] Iniciando instalação silenciosa..." -ForegroundColor Cyan
 
-    $OfficeSetup   = Join-Path $global:ShareRoot "Office\setup.exe"
-    $OfficePTBR    = Join-Path $global:ShareRoot "Office\officesetup.exe"
+    $OfficeSetup   = Join-Path $global:ShareRoot "Office\\setup.exe"
+    $OfficePTBR    = Join-Path $global:ShareRoot "Office\\officesetup.exe"
 
     if (Test-Path $OfficeSetup) {
+        Unblock-File -Path $OfficeSetup
         Start-Process -FilePath $OfficeSetup -ArgumentList "/quiet /norestart" -Wait
     } else {
         Write-Host "setup.exe não encontrado: $OfficeSetup" -ForegroundColor Red
     }
 
     if (Test-Path $OfficePTBR) {
+        Unblock-File -Path $OfficePTBR
         Start-Process -FilePath $OfficePTBR -ArgumentList "/quiet /norestart" -Wait
     } else {
         Write-Host "officesetup.exe não encontrado: $OfficePTBR" -ForegroundColor Red
