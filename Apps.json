@@ -1,0 +1,5 @@
+[
+  { "nome": "Office 2021 + PT-BR", "funcao": "Install-Office2021" },
+  { "nome": "Google Chrome",       "funcao": "Install-Chrome"    },
+  { "nome": "7-Zip",               "funcao": "Install-7Zip"      }
+]
