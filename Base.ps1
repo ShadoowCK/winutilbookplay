@@ -15,19 +15,19 @@ if ($consolePtr -ne [IntPtr]::Zero) { [Win32]::ShowWindow($consolePtr, 0) }   # 
 [System.Windows.Forms.Application]::EnableVisualStyles()
 
 # --- Carrega catálogos -----------------------------------------------------------
-function Load-Catalog ($url) {
+function Get-Catalog ($url) {
     try   { (Invoke-WebRequest -UseBasicParsing $url).Content | ConvertFrom-Json }
     catch { [System.Windows.Forms.MessageBox]::Show("Falha ao baixar " + $url); return $null }
 }
 
 $repoRoot = "https://raw.githubusercontent.com/ShadoowCK/winutilbookplay/main"
-$appsCatalog   = Load-Catalog "$repoRoot/Apps.json"
-$tweaksCatalog = Load-Catalog "$repoRoot/Tweaks.json"
+$appsCatalog   = Get-Catalog "$repoRoot/Apps.json"
+$tweaksCatalog = Get-Catalog "$repoRoot/Tweaks.json"
 if (-not $appsCatalog -or -not $tweaksCatalog) { exit }
 
 # --- Form ------------------------------------------------------------------------
 $form = New-Object System.Windows.Forms.Form
-$form.Text = "WinUtil Empresa"
+$form.Text = "WinUtil BookPlay"
 $form.StartPosition = "CenterScreen"
 $form.Size = New-Object System.Drawing.Size(620,520)
 $form.FormBorderStyle = 'FixedDialog'
