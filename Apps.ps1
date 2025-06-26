@@ -1,112 +1,82 @@
-# Apps.ps1 – instaladores com etapas numeradas para debug organizado
-# ------------------------------------------------------------------
-# Este script executa instaladores diretamente do compartilhamento UNC
-# sem mapear unidade (Z:). Ele apenas autentica a sessão SMB com
-# `net use` e dispara o executável no local.
+## Apps.ps1 – Instalador universal (passo a passo)
+# ---------------------------------------------------------------
+# Objetivo: localizar qualquer instalador em
+#           \\192.168.4.100\util\01 - Programas\WinUtil\Instaladores
+#           e executá‑lo em ordem definida, SEM mapear unidade.
+#
+# Fluxo para Office 2021
+#   1. Executa Setup.exe sem argumentos (mesmo comportamento do clique manual)
+#   2. Em seguida executa OfficeSetup.exe /quiet /norestart
+#
+# Cada passo é numerado para depuração.
 
-# ──────────────────────────────────────────────────────────────────
-# [Etapa 1] - Configurações globais
-# ──────────────────────────────────────────────────────────────────
-$global:InstallShareUser = 'mundial\_install'                # domínio\usuário
-$global:InstallSharePass = 'sup@2023#'                       # senha desse usuário
-$global:InstallShareRoot = '\\192.168.4.100\util\01 - Programas\WinUtil\Instaladores'
-$global:ShareRoot        = $global:InstallShareRoot          # raiz UNC para todos os instaladores
+# ────────────────────────────────────────────────────────────────
+# [Passo 1] - Configurações globais
+# ────────────────────────────────────────────────────────────────
+$global:InstallShareUser = 'mundial\_install'
+$global:InstallSharePass = 'sup@2023#'
+$global:ShareRoot        = '\\192.168.4.100\util\01 - Programas\WinUtil\Instaladores'
 
-# ──────────────────────────────────────────────────────────────────
-# [Etapa 2] - Autenticar sessão SMB (sem mapear unidade)
-# ──────────────────────────────────────────────────────────────────
+# ────────────────────────────────────────────────────────────────
+# [Passo 2] - Autenticar sessão SMB (sem mapear unidade)
+# ────────────────────────────────────────────────────────────────
 function Connect-InstallShare {
-    # Verifica se já existe credencial para o host
     $existing = (cmd.exe /c "net use" | Select-String "192.168.4.100").Line
-    if ($existing) {
-        Write-Host "[2.1] Já autenticado em 192.168.4.100."; return $true
-    }
+    if ($existing) { Write-Host "[2.1] Já autenticado."; return $true }
 
-    $cmd = "net use `"$($global:InstallShareRoot)`" /user:$($global:InstallShareUser) $($global:InstallSharePass) /persistent:no"
-    Write-Host "[2.2] Autenticando com: $cmd"
-    cmd.exe /c "$cmd"
-
-    if ($LASTEXITCODE -eq 0) {
-        Write-Host "[2.3] Autenticação OK."; return $true
-    } else {
-        Write-Host "[2.3] Falha na autenticação." -ForegroundColor Red
-        return $false
-    }
+    $cmd = "net use `"$global:ShareRoot`" /user:$global:InstallShareUser $global:InstallSharePass /persistent:no"
+    Write-Host "[2.2] Autenticando: $cmd"
+    cmd.exe /c $cmd | Out-Null
+    if ($LASTEXITCODE -eq 0) { Write-Host "[2.3] Autenticação OK."; return $true }
+    Write-Host "[2.3] Falha na autenticação." -ForegroundColor Red; return $false
 }
 
-# ──────────────────────────────────────────────────────────────────
-# [Etapa 3] - Encerrar sessão SMB (opcional)
-# ──────────────────────────────────────────────────────────────────
-function Disconnect-InstallShare {
-    cmd.exe /c "net use \"$($global:InstallShareRoot)\" /delete /yes" | Out-Null
-    Write-Host "[3.1] Sessão com 192.168.4.100 encerrada."
+# ────────────────────────────────────────────────────────────────
+# [Passo 3] - Helper: localizar arquivo dentro do share
+# ────────────────────────────────────────────────────────────────
+function Get-InstallerPath {
+    param([string]$RelativePath)
+    $full = Join-Path $global:ShareRoot $RelativePath
+    if (Test-Path $full) {
+        Write-Host "[3.2] Encontrado: $full"; return $full
+    }
+    Write-Host "[3.1] Não encontrado: $full" -ForegroundColor Red; return $null
 }
 
-
-# ──────────────────────────────────────────────────────────────────
-# [Etapa 4] - Executar instalador silencioso diretamente do share
-# ──────────────────────────────────────────────────────────────────
-function Invoke-SilentInstallDirect {
-    param (
-        [string]$ExePath,
-        [string]$Arguments = '/quiet /norestart'
+# ────────────────────────────────────────────────────────────────
+# [Passo 4] - Executar instalador
+# ────────────────────────────────────────────────────────────────
+function Start-Installer {
+    param(
+        [string]$RelativeExe,
+        [string]$Arguments = ''
     )
+    $exePath = Get-InstallerPath $RelativeExe
+    if (-not $exePath) { return }
 
-    if (-not (Test-Path $ExePath)) {
-        Write-Host "[4.1] Arquivo não encontrado: $ExePath" -ForegroundColor Red
-        return
-    }
-
-    Write-Host "[4.2] Executando: $ExePath $Arguments"
+    Write-Host "[4.x] Executando: $exePath $Arguments"
     try {
-        Start-Process -FilePath $ExePath -ArgumentList $Arguments -Wait -ErrorAction Stop
-        Write-Host "      ✔ Instalação concluída."
+        $p = Start-Process -FilePath $exePath -ArgumentList $Arguments -Wait -PassThru -ErrorAction Stop
+        Write-Host "      ✔ Concluído. ExitCode=$($p.ExitCode)"
     } catch {
-        Write-Error  "      ✖ Falha: $($_.Exception.Message)"
+        Write-Error  "      ✖ Falha -> $($_.Exception.Message)"
     }
 }
-# ──────────────────────────────────────────────────────────────────
-# [Etapa 5] - Instalar Office 2021 (direto do compartilhamento)
-# ──────────────────────────────────────────────────────────────────
+
+# ────────────────────────────────────────────────────────────────
+# [Passo 5] - Instalação do Office 2021
+# ────────────────────────────────────────────────────────────────
 function Install-Office2021 {
-    Write-Host "[5.1] Iniciando instalação silenciosa do Office..."
+    Write-Host "[5] Iniciando instalação do Office 2021"
     if (-not (Connect-InstallShare)) { return }
 
-    $officeDir = Join-Path $global:ShareRoot 'Office'
-    $setupExe       = Join-Path $officeDir 'Setup.exe'
-    $officeSetupExe = Join-Path $officeDir 'OfficeSetup.exe'
-    $configPath     = Join-Path $officeDir 'config.xml'
+    # 1. Setup.exe sem argumentos (comportamento igual ao clique manual)
+    Start-Installer 'Office/Setup.exe'
 
-    $installSteps = @(
-        @{ Path = $setupExe;       Name = 'Setup.exe'       }
-        @{ Path = $officeSetupExe; Name = 'OfficeSetup.exe' }
-    )
+    # 2. OfficeSetup.exe silencioso
+    Start-Installer 'Office/OfficeSetup.exe' '/quiet /norestart'
 
-    $step = 0; $total = $installSteps.Count
-    foreach ($item in $installSteps) {
-        $step++
-        $exePath = $item.Path
-        $exeName = $item.Name
-
-        Write-Progress -Activity 'Instalando Office' -Status "Passo $step/${total}: $exeName" -PercentComplete (($step-1)/$total*100)
-
-        if (-not (Test-Path $exePath)) {
-            Write-Warning "[5.$step] $exeName não encontrado: $exePath — pulando."
-            continue
-        }
-
-        # Usa /configure apenas para Setup.exe se config.xml existir
-        $installArgs = if ($exeName -eq 'Setup.exe' -and (Test-Path $configPath)) {
-            "/configure `"$configPath`""
-        } else {
-            '/quiet /norestart'
-        }
-
-        Invoke-SilentInstallDirect $exePath $installArgs
-    }
-
-    Write-Progress -Activity 'Instalando Office' -Completed
-    #Disconnect-InstallShare   # opcional
+    Write-Host "[5] Instalação do Office concluída."
 }
 
 # [Etapa 6] - Instalação do Chrome
