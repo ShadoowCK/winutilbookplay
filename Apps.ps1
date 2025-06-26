@@ -71,10 +71,10 @@ function Install-Office2021 {
     if (-not (Connect-InstallShare)) { return }
 
     # 1. Setup.exe sem argumentos (comportamento igual ao clique manual)
-    Start-Installer 'Office/Setup.exe'
+    Run-Installer 'Office/Setup.exe'
 
     # 2. OfficeSetup.exe silencioso
-    Start-Installer 'Office/OfficeSetup.exe' '/quiet /norestart'
+    Run-Installer 'Office/OfficeSetup.exe' '/quiet /norestart'
 
     Write-Host "[5] Instalação do Office concluída."
 }
