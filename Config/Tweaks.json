@@ -1,0 +1,10 @@
+
+{
+  "__comment": "Placeholder. Rode .\\Tweaks.ps1 -Update para baixar a versão completa direta do WinUtil (Chris Titus Tech). Este arquivo é substituído automaticamente.",
+  "Exemplo": {
+    "Content": "Este item é apenas ilustrativo",
+    "Description": "Será removido após o primeiro -Update",
+    "category": "Info",
+    "panel": "0"
+  }
+}
