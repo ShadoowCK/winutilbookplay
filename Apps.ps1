@@ -5,8 +5,8 @@
 $global:InstallShareUser   = 'mundial\_install'
 $global:InstallSharePass   = 'sup@2023#'
 $global:InstallShareRoot   = '\\192.168.4.100\util\01 - Programas\WinUtil\Instaladores'
-$global:InstallShareDrive  = 'Z'                     # letra a mapear
-$global:MappedRoot        = "$($global:InstallShareDrive):"  # ex: Z:
+$global:InstallShareDrive  = 'K'                     # nova letra de unidade
+$global:MappedRoot         = "$($global:InstallShareDrive):"  # ex: K:
 
 # ────────────────────────────────────────────────────────────────
 # [2] Mapear unidade (sem salvar credenciais)
@@ -17,9 +17,9 @@ function Connect-InstallShare {
         return $true
     }
 
-    Write-Host "[2.2] Mapeando $($global:InstallShareDrive): para $global:InstallShareRoot…"
+    Write-Host "[2.2] Mapeando $($global:InstallShareDrive): → $global:InstallShareRoot …"
     $cmd = "net use $($global:InstallShareDrive): `"$($global:InstallShareRoot)`" /user:$($global:InstallShareUser) $($global:InstallSharePass) /persistent:no"
-    cmd.exe /c "$cmd" | Out-Null
+    cmd.exe /c $cmd | Out-Null
 
     if ($LASTEXITCODE -eq 0) {
         Write-Host "[2.3] Mapeamento OK."
