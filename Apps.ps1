@@ -2,98 +2,54 @@
 # ────────────────────────────────────────────────────────────────
 # [1] Configurações globais
 # ────────────────────────────────────────────────────────────────
-$global:InstallShareUser   = "mundial\_install"
-$global:InstallSharePass   = 'sup@2023#'
-$global:InstallShareRoot   = '\\192.168.4.100\util\01 - Programas\WinUtil\Instaladores'
-$global:InstallShareDrive  = 'K'
-$global:MappedRoot         = "$($global:InstallShareDrive):"  # K:
+$global:InstallShareUser  = 'mundial\_install'
+$global:InstallSharePass  = 'sup@2023#'
+$global:InstallBasePath   = '\\192.168.4.100\util\WinUtil\Instaladores'
 
 # ────────────────────────────────────────────────────────────────
-# [2] Mapear K: (sem salvar credenciais)
-# ────────────────────────────────────────────────────────────────
-function Connect-InstallShare {
-    if (Get-PSDrive -Name $global:InstallShareDrive -ErrorAction SilentlyContinue) {
-        Write-Host "[2.1] Unidade K: já mapeada."; return $true }
-
-    Write-Host "[2.2] Mapeando K: → $global:InstallShareRoot …"
-    $cmd = "net use $global:InstallShareDrive`: `"$global:InstallShareRoot`" /user:$global:InstallShareUser $global:InstallSharePass /persistent:no"
-    cmd.exe /c $cmd | Out-Null
-    if ($LASTEXITCODE -eq 0) { Write-Host "[2.3] Mapeamento OK."; return $true }
-    Write-Host "[2.3] Falha ao mapear." -ForegroundColor Red; return $false
-}
-
-# ────────────────────────────────────────────────────────────────
-# [3] Desmontar K:
-# ────────────────────────────────────────────────────────────────
-function Disconnect-InstallShare {
-    if (Get-PSDrive -Name $global:InstallShareDrive -ErrorAction SilentlyContinue) {
-        Write-Host "[3.1] Desmontando K: …"; cmd.exe /c "net use $($global:InstallShareDrive): /delete /yes" | Out-Null }
-}
-
-# ────────────────────────────────────────────────────────────────
-# [4] Resolver instalador: caminho padrão OU busca recursiva
-# ────────────────────────────────────────────────────────────────
-function Resolve-Installer {
-    param(
-        [string]$DefaultRelative,  # ex: 'Office\Setup.exe'
-        [string]$SearchPattern     # ex: 'Setup.exe'
-    )
-
-    # 4.1 Caminho padrão (mais rápido)
-    $defaultPath = Join-Path $global:MappedRoot $DefaultRelative
-    if (Test-Path $defaultPath) {
-        Write-Host "[4.1] Encontrado (padrão): $defaultPath"; return $defaultPath }
-
-    # 4.2 Busca recursiva
-    Write-Host "[4.2] Padrão não encontrado. Buscando *$SearchPattern* em K: …"
-    $found = Get-ChildItem -Path $global:MappedRoot -Filter $SearchPattern -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
-    if ($found) {
-        Write-Host "[4.3] Encontrado (busca): $($found.FullName)"; return $found.FullName }
-
-    Write-Host "[4.4] NÃO encontrado: $SearchPattern" -ForegroundColor Red; return $null
-}
-
-# ────────────────────────────────────────────────────────────────
-# [5] Executar instalador
+# [2] Executar instalador
 # ────────────────────────────────────────────────────────────────
 function Start-Installer {
     param(
-        [string]$DefaultRel,
-        [string]$ExeName,
+        [string]$FullExePath,
         [string]$InstallerArgs = $null
     )
 
-    $path = Resolve-Installer $DefaultRel $ExeName
-    if (-not $path) { return }
+    if (-not (Test-Path $FullExePath)) {
+        Write-Host "[2.1] NÃO encontrado: $FullExePath" -ForegroundColor Red
+        return
+    }
 
-    Write-Host "[5] Executando: $path $InstallerArgs"
+    Write-Host "[2.2] Executando: $FullExePath $InstallerArgs"
     try {
-        $p = if ($InstallerArgs) {
-            Start-Process -FilePath $path -ArgumentList $InstallerArgs -Wait -PassThru -ErrorAction Stop
+        $proc = if ($InstallerArgs) {
+            Start-Process -FilePath $FullExePath -ArgumentList $InstallerArgs -Wait -PassThru -ErrorAction Stop
         } else {
-            Start-Process -FilePath $path -Wait -PassThru -ErrorAction Stop
+            Start-Process -FilePath $FullExePath -Wait -PassThru -ErrorAction Stop
         }
-        Write-Host "      ✔ ExitCode=$($p.ExitCode)"
+        Write-Host "      ✔ ExitCode=$($proc.ExitCode)"
     } catch {
-        Write-Error  "      ✖ Erro: $($_.Exception.Message)"
+        Write-Error "      ✖ Erro: $($_.Exception.Message)"
     }
 }
 
 # ────────────────────────────────────────────────────────────────
-# [6] Instalar Office 2021
+# [3] Instalar Office 2021
 # ────────────────────────────────────────────────────────────────
 function Install-Office2021 {
-    Write-Host "[6.1] Iniciando instalação do Office…"
-    if (-not (Connect-InstallShare)) { return }
+    Write-Host "[3.1] Iniciando instalação do Office 2021…"
+
+    # Caminho completo para os instaladores
+    $setupPath        = Join-Path $global:InstallBasePath 'Office\Setup.exe'
+    $officeSetupPath  = Join-Path $global:InstallBasePath 'Office\OfficeSetup.exe'
 
     # 1) Setup.exe (GUI)
-    Start-Installer 'Office\Setup.exe' 'Setup.exe'
+    Start-Installer $setupPath
 
     # 2) OfficeSetup.exe (silencioso)
-    Start-Installer 'Office\OfficeSetup.exe' 'OfficeSetup.exe' '/quiet /norestart'
+    Start-Installer $officeSetupPath '/quiet /norestart'
 
-    Disconnect-InstallShare
-    Write-Host "[6.2] Processo concluído."
+    Write-Host "[3.2] Processo concluído."
 }
 
 # [Etapa 8] - Instalação do 7-Zip
