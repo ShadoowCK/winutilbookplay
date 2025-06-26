@@ -40,8 +40,8 @@ function Install-Office2021 {
     Write-Host "[3.1] Iniciando instalação do Office 2021…"
 
     # Caminho completo para os instaladores
-    $setupPath        = Join-Path $global:InstallBasePath 'Office\Setup.exe'
-    $officeSetupPath  = Join-Path $global:InstallBasePath 'Office\OfficeSetup.exe'
+    $setupPath        = Join-Path $global:InstallBasePath '\Office\Setup.exe'
+    $officeSetupPath  = Join-Path $global:InstallBasePath '\Office\OfficeSetup.exe'
 
     # 1) Setup.exe (GUI)
     Start-Installer $setupPath
