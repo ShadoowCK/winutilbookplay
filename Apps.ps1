@@ -2,53 +2,55 @@
 # ────────────────────────────────────────────────────────────────
 # [1] Configurações globais
 # ────────────────────────────────────────────────────────────────
-$global:InstallShareUser   = 'mundial\_install'
+$global:InstallShareUser   = "mundial\_install"
 $global:InstallSharePass   = 'sup@2023#'
 $global:InstallShareRoot   = '\\192.168.4.100\util\01 - Programas\WinUtil\Instaladores'
-$global:InstallShareDrive  = 'K'                     # nova letra de unidade
-$global:MappedRoot         = "$($global:InstallShareDrive):"  # ex: K:
+$global:InstallShareDrive  = 'K'
+$global:MappedRoot         = "$($global:InstallShareDrive):"  # K:
 
 # ────────────────────────────────────────────────────────────────
-# [2] Mapear unidade (sem salvar credenciais)
+# [2] Mapear K: (sem salvar credenciais)
 # ────────────────────────────────────────────────────────────────
 function Connect-InstallShare {
     if (Get-PSDrive -Name $global:InstallShareDrive -ErrorAction SilentlyContinue) {
-        Write-Host "[2.1] Unidade $($global:InstallShareDrive): já mapeada."
-        return $true
-    }
+        Write-Host "[2.1] Unidade K: já mapeada."; return $true }
 
-    Write-Host "[2.2] Mapeando $($global:InstallShareDrive): → $global:InstallShareRoot …"
-    $cmd = "net use $($global:InstallShareDrive): `"$($global:InstallShareRoot)`" /user:$($global:InstallShareUser) $($global:InstallSharePass) /persistent:no"
+    Write-Host "[2.2] Mapeando K: → $global:InstallShareRoot …"
+    $cmd = "net use $global:InstallShareDrive`: `"$global:InstallShareRoot`" /user:$global:InstallShareUser $global:InstallSharePass /persistent:no"
     cmd.exe /c $cmd | Out-Null
-
-    if ($LASTEXITCODE -eq 0) {
-        Write-Host "[2.3] Mapeamento OK."
-        return $true
-    } else {
-        Write-Host "[2.3] Falha ao mapear." -ForegroundColor Red
-        return $false
-    }
+    if ($LASTEXITCODE -eq 0) { Write-Host "[2.3] Mapeamento OK."; return $true }
+    Write-Host "[2.3] Falha ao mapear." -ForegroundColor Red; return $false
 }
 
 # ────────────────────────────────────────────────────────────────
-# [3] Desmontar unidade (boa prática)
+# [3] Desmontar K:
 # ────────────────────────────────────────────────────────────────
 function Disconnect-InstallShare {
     if (Get-PSDrive -Name $global:InstallShareDrive -ErrorAction SilentlyContinue) {
-        Write-Host "[3.1] Desmontando $($global:InstallShareDrive): …"
-        cmd.exe /c "net use $($global:InstallShareDrive): /delete /yes" | Out-Null
-    }
+        Write-Host "[3.1] Desmontando K: …"; cmd.exe /c "net use $($global:InstallShareDrive): /delete /yes" | Out-Null }
 }
 
 # ────────────────────────────────────────────────────────────────
-# [4] Localizar instalador
+# [4] Resolver instalador: caminho padrão OU busca recursiva
 # ────────────────────────────────────────────────────────────────
-function Get-InstallerPath {
-    param([string]$RelativePath)           # ex: 'Office\Setup.exe'
-    $fullPath = Join-Path $global:MappedRoot $RelativePath
-    if (Test-Path $fullPath) {
-        Write-Host "[4.1] Encontrado: $fullPath"; return $fullPath }
-    Write-Host "[4.1] NÃO encontrado: $fullPath" -ForegroundColor Red; return $null
+function Resolve-Installer {
+    param(
+        [string]$DefaultRelative,  # ex: 'Office\Setup.exe'
+        [string]$SearchPattern     # ex: 'Setup.exe'
+    )
+
+    # 4.1 Caminho padrão (mais rápido)
+    $defaultPath = Join-Path $global:MappedRoot $DefaultRelative
+    if (Test-Path $defaultPath) {
+        Write-Host "[4.1] Encontrado (padrão): $defaultPath"; return $defaultPath }
+
+    # 4.2 Busca recursiva
+    Write-Host "[4.2] Padrão não encontrado. Buscando *$SearchPattern* em K: …"
+    $found = Get-ChildItem -Path $global:MappedRoot -Filter $SearchPattern -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($found) {
+        Write-Host "[4.3] Encontrado (busca): $($found.FullName)"; return $found.FullName }
+
+    Write-Host "[4.4] NÃO encontrado: $SearchPattern" -ForegroundColor Red; return $null
 }
 
 # ────────────────────────────────────────────────────────────────
@@ -56,23 +58,24 @@ function Get-InstallerPath {
 # ────────────────────────────────────────────────────────────────
 function Start-Installer {
     param(
-        [string]$RelativeExe,
-        [string]$Arguments = $null
+        [string]$DefaultRel,
+        [string]$ExeName,
+        [string]$InstallerArgs = $null
     )
 
-    $exePath = Get-InstallerPath $RelativeExe
-    if (-not $exePath) { return }
+    $path = Resolve-Installer $DefaultRel $ExeName
+    if (-not $path) { return }
 
-    Write-Host "[5] Executando: $exePath $Arguments"
+    Write-Host "[5] Executando: $path $InstallerArgs"
     try {
-        if ($Arguments) {
-            Start-Process -FilePath $exePath -ArgumentList $Arguments -Wait -PassThru -ErrorAction Stop
+        $p = if ($InstallerArgs) {
+            Start-Process -FilePath $path -ArgumentList $InstallerArgs -Wait -PassThru -ErrorAction Stop
         } else {
-            Start-Process -FilePath $exePath -Wait -PassThru -ErrorAction Stop
+            Start-Process -FilePath $path -Wait -PassThru -ErrorAction Stop
         }
-        Write-Host "      ✔ Concluído."
+        Write-Host "      ✔ ExitCode=$($p.ExitCode)"
     } catch {
-        Write-Error "      ✖ Erro: $($_.Exception.Message)"
+        Write-Error  "      ✖ Erro: $($_.Exception.Message)"
     }
 }
 
@@ -83,21 +86,14 @@ function Install-Office2021 {
     Write-Host "[6.1] Iniciando instalação do Office…"
     if (-not (Connect-InstallShare)) { return }
 
-    Start-Installer 'Office\Setup.exe'            # GUI
-    Start-Installer 'Office\OfficeSetup.exe' '/quiet /norestart'
+    # 1) Setup.exe (GUI)
+    Start-Installer 'Office\Setup.exe' 'Setup.exe'
+
+    # 2) OfficeSetup.exe (silencioso)
+    Start-Installer 'Office\OfficeSetup.exe' 'OfficeSetup.exe' '/quiet /norestart'
 
     Disconnect-InstallShare
     Write-Host "[6.2] Processo concluído."
-}
-
-# [Etapa 7] - Instalação do Chrome
-function Install-Chrome {
-    Write-Host "[6.1] Baixando Chrome..."
-    $url='https://dl.google.com/chrome/install/latest/chrome_installer.exe'
-    $dest="$env:TEMP\chrome_installer.exe"
-    Invoke-WebRequest $url -OutFile $dest
-    Write-Host "[6.2] Executando instalador do Chrome..."
-    Start-Process $dest -Arg '/silent /install' -Wait
 }
 
 # [Etapa 8] - Instalação do 7-Zip
