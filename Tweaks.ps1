@@ -75,7 +75,7 @@ function Invoke-ScriptBlock ($lines) {
     }
 }
 
-function Run-Tweak ($key, $revert) {
+function Invoke-Tweak ($key, $revert) {
     $t = $Tweaks.$key
     if (-not $t) { Write-Warning "Tweak '$key' não encontrado."; return }
     Write-Host "`n==== $($t.Content)  ($(if($revert){'UNDO'}else{'APLICAR'})) ===="
@@ -94,4 +94,4 @@ if (-not $Keys) {
             Out-GridView -Title "Selecione os Tweaks para $(if($Undo){'DESFAZER'}else{'APLICAR'})" -PassThru
 }
 
-foreach ($k in $Keys) { Run-Tweak $k $Undo.IsPresent }
+foreach ($k in $Keys) { Invoke-Tweak $k $Undo.IsPresent }
